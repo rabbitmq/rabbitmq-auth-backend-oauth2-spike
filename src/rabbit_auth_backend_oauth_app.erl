@@ -2,7 +2,7 @@
 
 
 -behaviour(application).
--export([start/2, stop/1]).
+-export([start/2, stop/1, reset_dispatcher/1]).
 
 -behaviour(supervisor).
 -export([init/1]).
@@ -12,14 +12,7 @@
 start(_Type, _StartArgs) ->
     {ok, AuthServer} = application:get_env(rabbitmq_auth_backend_oauth, 
                                            auth_server),
-    case AuthServer of
-        undefined -> ok;
-        [] -> ok;
-        Config ->
-            {_, Listener} = lists:keyfind(listener, 1, AuthServer),
-            register_context(Listener, []),
-            log_startup(Listener)
-    end,
+    maybe_register_context(AuthServer, []),
     supervisor:start_link({local,?MODULE},?MODULE,[]).
 
 stop(_State) ->
@@ -33,14 +26,24 @@ stop(_State) ->
 %% about-to-disable apps from our new dispatcher.
 reset_dispatcher(IgnoreApps) ->
     unregister_context(),
-    {ok, Listener} = application:get_env(rabbitmq_auth_backend_oauth, listener),
-    register_context(Listener, IgnoreApps).
+    {ok, AuthServer} = application:get_env(rabbitmq_auth_backend_oauth, 
+                                           auth_server),
+    maybe_register_context(AuthServer, IgnoreApps).
 
-register_context(Listener, IgnoreApps) ->
+maybe_register_context(undefined, _IgnoreApps)  -> ok;
+maybe_register_context([], _IgnoreApps)         -> ok;
+maybe_register_context({AuthServerType, Listener}, _IgnoreApps) ->
+    {Route, Description} = case AuthServerType of
+        internal -> 
+            {[{'_', [{"/oauth", rabbit_oauth2_auth, []}]}], 
+             "RabbitMQ Oauth2 auth server"};
+        external ->
+            {[{'_', [{"/access_token", rabbit_oauth2_access_token, []}]}],
+             "RabbitMQ Oauth2 access token endpoint"}
+    end,
     rabbit_web_dispatch:register_context_handler(
-        ?CONTEXT, Listener, "",
-        cowboy_router:compile([{'_', [{"/oauth", rabbit_oauth2_auth, []}]}]),
-        "RabbitMQ Oauth2 auth server").
+        ?CONTEXT, Listener, "", 
+        cowboy_router:compile(Route), Description).
 
 unregister_context() ->
     rabbit_web_dispatch:unregister_context(?CONTEXT).

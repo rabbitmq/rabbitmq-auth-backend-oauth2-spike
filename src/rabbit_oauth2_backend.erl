@@ -25,6 +25,7 @@
 
 -export([setup_schema/0]).
 -export([vhost_access/2, resource_access/3]).
+-export([add_access_token/3, add_access_token/4]).
 
 -rabbit_boot_step({rabbit_auth_backend_oauth_mnesia,
                    [{description, "authosation oauth2: mnesia"},
@@ -52,6 +53,21 @@
 
 oauth2_backend_env() ->
     application:set_env(oauth2, backend, rabbit_oauth2_backend).
+
+add_access_token(Token, Scope, ExpiresIn) when is_list(Scope), 
+                                               is_integer(ExpiresIn) ->
+    add_access_token(Token, Scope, ExpiresIn, time_compat:os_system_time(seconds)).
+
+add_access_token(Token, Scope, ExpiresIn, CreatedAt) 
+    when is_list(Scope),
+         is_integer(ExpiresIn),
+         is_integer(CreatedAt) ->
+    {ok, []} = associate_access_token(Token, 
+                                      [{<<"scope">>, Scope}, 
+                                       {<<"expiry_time">>, 
+                                        ExpiresIn + CreatedAt}], 
+                                      []),
+    ok.
 
 %% Behaviour functions --------------------------------------------------------
 

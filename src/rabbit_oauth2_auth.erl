@@ -97,7 +97,7 @@ process_password_grant(Req, Params) ->
 %%% Internal functions
 %%%===================================================================
 
-issue_token({ok, {AppCtx, Auth}}, Req) ->
+issue_token({ok, {_AppCtx, Auth}}, Req) ->
     emit_response(oauth2:issue_token(Auth, []), Req);
 issue_token(Error, Req) ->
     emit_response(Error, Req).
