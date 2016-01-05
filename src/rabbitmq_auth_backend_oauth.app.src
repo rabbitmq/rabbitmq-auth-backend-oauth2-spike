@@ -1,0 +1,9 @@
+%% -*- erlang -*-
+{application, rabbitmq_auth_backend_oauth,
+ [{description, "RabbitMQ OAuth2 Authentication Backend"},
+  {vsn, ""},
+  {modules, [rabbit_auth_backend_oauth_app, rabbit_auth_backend_oauth, rabbit_oauth2_backend]},
+  {registered, []},
+  {mod, {rabbit_auth_backend_oauth_app, []}},
+  {env, [{auth_server, [{listener, [{port, 15672}]}]}]},
+  {applications, [kernel, stdlib, inets, cowlib, cowboy, rabbitmq_web_dispatch]}]}.
