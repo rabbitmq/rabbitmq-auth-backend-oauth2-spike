@@ -26,6 +26,7 @@
 -export([setup_schema/0]).
 -export([vhost_access/2, resource_access/3]).
 -export([add_access_token/3, add_access_token/4]).
+-export([oauth2_backend_env/0]).
 
 -rabbit_boot_step({rabbit_auth_backend_oauth_mnesia,
                    [{description, "authosation oauth2: mnesia"},
@@ -49,7 +50,9 @@
     context
     }).
 
+-ifdef(TEST).
 -compile(export_all).
+-endif.
 
 oauth2_backend_env() ->
     application:set_env(oauth2, backend, rabbit_oauth2_backend).
@@ -75,7 +78,7 @@ authenticate_user({Username, Password}, Ctx) ->
     rabbit_log:info("User ~p Pass ~p", [Username, Password]),
     case ?BACKEND:user_login_authentication(Username, [{password, Password}]) of
         {refused, _Err} -> {error, notfound};
-        {refused, Format, Arg} -> {error, notfound};
+        {refused, _Format, _Arg} -> {error, notfound};
         {ok, AuthUser} -> {ok, {Ctx, AuthUser}}
     end.
 
@@ -229,7 +232,7 @@ parse_scope_el(ScopeEl) when is_binary(ScopeEl) ->
                 <<"read">>  -> read;
                 _           -> ignore
             end,
-            case Kind == ignore orelse Permission == ignore of
+            case Kind == ignore orelse Permission == ignore orelse Name == [] of
                 true -> ignore;
                 false ->
                     {

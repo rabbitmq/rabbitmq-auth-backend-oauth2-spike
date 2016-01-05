@@ -9,4 +9,4 @@
 /logs/
 /plugins/
 
-/rabbitmq_auth_backend_http.d
+/rabbitmq_auth_backend_oauth.d

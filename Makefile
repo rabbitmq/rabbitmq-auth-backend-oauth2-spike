@@ -13,3 +13,7 @@ ERLANG_MK_COMMIT = rabbitmq-tmp
 
 include rabbitmq-components.mk
 include erlang.mk
+
+
+STANDALONE_TEST_COMMANDS := \
+	rabbit_oauth2_backend_test:test()

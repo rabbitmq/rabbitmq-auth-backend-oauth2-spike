@@ -41,18 +41,13 @@ maybe_register_context({AuthServerType, Listener}, _IgnoreApps) ->
             {[{'_', [{"/access_token", rabbit_oauth2_access_token, []}]}],
              "RabbitMQ Oauth2 access token endpoint"}
     end,
+    % TODO log
     rabbit_web_dispatch:register_context_handler(
         ?CONTEXT, Listener, "", 
         cowboy_router:compile(Route), Description).
 
 unregister_context() ->
     rabbit_web_dispatch:unregister_context(?CONTEXT).
-
-log_startup(Listener) ->
-    rabbit_log:info("Oauth2 auth server started. Port: ~w~n", [port(Listener)]).
-
-port(Listener) ->
-    proplists:get_value(port, Listener).
 
 init([]) ->
     {ok, {{one_for_one,3,10},[]}}.
