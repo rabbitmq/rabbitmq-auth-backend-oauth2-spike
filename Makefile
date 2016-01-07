@@ -1,6 +1,6 @@
 PROJECT = rabbitmq_auth_backend_oauth
 
-DEPS = cowboy rabbitmq_web_dispatch rabbit_common oauth2
+DEPS = cowboy rabbitmq_web_dispatch rabbit_common oauth2 erlydtl
 TEST_DEPS = rabbit
 
 DEP_PLUGINS = rabbit_common/mk/rabbitmq-plugin.mk

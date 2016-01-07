@@ -82,6 +82,8 @@ authenticate_user({Username, Password}, Ctx) ->
         {ok, AuthUser} -> {ok, {Ctx, AuthUser}}
     end.
 
+%% Access token ---------------------------------------------------------------
+
 associate_access_token(AccessToken, Context, AppContext) ->
     ok = save(AccessToken, Context),
     {ok, AppContext}.
@@ -99,12 +101,10 @@ revoke_access_token(AccessToken, AppContext) ->
         end),
     {ok, AppContext}.
 
+%% Access code ----------------------------------------------------------------
+
 associate_access_code(AccessCode, Context, AppContext) ->
     ets:insert(?ETS_TABLE_CODE, {AccessCode, Context}),
-    {ok, AppContext}.
-
-associate_refresh_token(RefreshToken, Context, AppContext) ->
-    ets:insert(?ETS_TABLE_REFRESH, {RefreshToken, Context}),
     {ok, AppContext}.
 
 resolve_access_code(AccessCode, AppContext) ->
@@ -113,19 +113,27 @@ resolve_access_code(AccessCode, AppContext) ->
         [{_, Context}] -> {ok, {AppContext, Context}}
     end.
 
+revoke_access_code(AccessCode, AppContext) ->
+    ets:delete(?ETS_TABLE_CODE, AccessCode),
+    {ok, AppContext}.
+
+%% Refresh token --------------------------------------------------------------
+
+associate_refresh_token(RefreshToken, Context, AppContext) ->
+    ets:insert(?ETS_TABLE_REFRESH, {RefreshToken, Context}),
+    {ok, AppContext}.
+
 resolve_refresh_token(RefreshToken, AppContext) ->
     case ets:lookup(?ETS_TABLE_REFRESH, RefreshToken) of
         []             -> {error, notfound};
         [{_, Context}] -> {ok, {AppContext, Context}}
     end.
 
-revoke_access_code(AccessCode, AppContext) ->
-    ets:delete(?ETS_TABLE_CODE, AccessCode),
-    {ok, AppContext}.
-
 revoke_refresh_token(RefreshToken, AppContext) ->
     ets:delete(?ETS_TABLE_REFRESH, RefreshToken),
     {ok, AppContext}.
+
+%% Scope ----------------------------------------------------------------------
 
 verify_scope(Scope, Scope, AppContext) -> {ok, {AppContext, Scope}};
 verify_scope(_, _, _)                  -> {error, invalid_scope}.
@@ -152,12 +160,15 @@ verify_resowner_scope(AuthUser, Scope, Ctx) ->
         _             -> {error, invalid_scope}
     end.
 
+verify_client_scope(_, _, _)    -> {error, invalid_scope}.
+
+%% Client ---------------------------------------------------------------------
+
 authenticate_client(_, _) -> {error, notfound}.
 get_client_identity(_, _) -> {error, notfound}.
 
 get_redirection_uri(_, _)       -> {error, notfound}.
 verify_redirection_uri(_, _, _) -> {error, mismatch}.
-verify_client_scope(_, _, _)    -> {error, invalid_scope}.
 
 %% API functions --------------------------------------------------------------
 

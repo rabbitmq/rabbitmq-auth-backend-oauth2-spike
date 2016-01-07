@@ -2,7 +2,7 @@
 
 Grant mechanisms.
 
-Foreign auth server API.
+Client management. Client id, secret and scopes.
 
 Default scope for "/" and default exchange
 
