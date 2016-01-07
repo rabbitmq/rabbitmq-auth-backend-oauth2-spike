@@ -15,5 +15,8 @@ include rabbitmq-components.mk
 include erlang.mk
 
 
+WITH_BROKER_TEST_COMMANDS:= \
+	rabbit_oauth2_backend_test:broker_tests()
+
 STANDALONE_TEST_COMMANDS := \
-	rabbit_oauth2_backend_test:test()
+	rabbit_oauth2_backend_test:standalone_tests()
