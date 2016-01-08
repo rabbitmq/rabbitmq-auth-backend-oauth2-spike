@@ -29,6 +29,18 @@
 -export([user_login_authentication/2, user_login_authorization/1,
          check_vhost_access/3, check_resource_access/3]).
 
+-rabbit_boot_step({rabbit_auth_backend_oauth_mnesia,
+                   [{description, "authosation oauth2: mnesia"},
+                    {mfa, {rabbit_oauth2_storage, setup_schema, []}},
+                    {requires, database},
+                    {enables, external_infrastructure}]}).
+
+-rabbit_boot_step({rabbit_auth_backend_oauth_backend_env,
+                   [{description, "authosation oauth2: oauth2 backend"},
+                    {mfa, {rabbit_oauth2_backend, oauth2_backend_env, []}},
+                    {requires, pre_boot},
+                    {enables, kernel_ready}]}).
+
 %%--------------------------------------------------------------------
 
 description() ->

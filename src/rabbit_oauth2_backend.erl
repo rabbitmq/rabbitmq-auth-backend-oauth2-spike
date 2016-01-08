@@ -23,32 +23,11 @@
 -export([verify_resowner_scope/3]).
 -export([verify_scope/3]).
 
--export([setup_schema/0]).
 -export([vhost_access/2, resource_access/3]).
 -export([add_access_token/3, add_access_token/4]).
 -export([oauth2_backend_env/0]).
 
--rabbit_boot_step({rabbit_auth_backend_oauth_mnesia,
-                   [{description, "authosation oauth2: mnesia"},
-                    {mfa, {?MODULE, setup_schema, []}},
-                    {requires, database},
-                    {enables, external_infrastructure}]}).
-
--rabbit_boot_step({rabbit_auth_backend_oauth_backend_env,
-                   [{description, "authosation oauth2: oauth2 backend"},
-                    {mfa, {?MODULE, oauth2_backend_env, []}},
-                    {requires, pre_boot},
-                    {enables, kernel_ready}]}).
-
--define(TOKEN_TABLE, rabbit_oauth_token).
--define(ETS_TABLE_CODE, rabbit_oauth_code).
--define(ETS_TABLE_REFRESH, rabbit_oauth_refresh).
 -define(BACKEND, rabbit_auth_backend_internal).
-
--record(token, {
-    token, 
-    context
-    }).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -85,52 +64,49 @@ authenticate_user({Username, Password}, Ctx) ->
 %% Access token ---------------------------------------------------------------
 
 associate_access_token(AccessToken, Context, AppContext) ->
-    ok = save(AccessToken, Context),
+    ok = rabbit_oauth2_storage:save_access_token(AccessToken, Context),
     {ok, AppContext}.
 
 resolve_access_token(AccessToken, AppContext) ->
-    case lookup(AccessToken) of
-        {ok, Context} -> {ok, {AppContext, Context}};
-        {error, notfound} -> {error, notfound}
+    case rabbit_oauth2_storage:lookup_access_token(AccessToken) of
+        {ok, {_, Context}} -> {ok, {AppContext, Context}};
+        {error, not_found} -> {error, notfound}
     end.
 
 revoke_access_token(AccessToken, AppContext) ->
-    rabbit_misc:execute_mnesia_transaction(
-        fun() ->
-            ok = mnesia:delete({?TOKEN_TABLE, AccessToken})
-        end),
+    ok = rabbit_oauth2_storage:remove_access_token(AccessToken),
     {ok, AppContext}.
 
 %% Access code ----------------------------------------------------------------
 
 associate_access_code(AccessCode, Context, AppContext) ->
-    ets:insert(?ETS_TABLE_CODE, {AccessCode, Context}),
+    ok = rabbit_oauth2_storage:save_access_code(AccessCode, Context),
     {ok, AppContext}.
 
 resolve_access_code(AccessCode, AppContext) ->
-    case ets:lookup(?ETS_TABLE_CODE, AccessCode) of
-        []             -> {error, notfound};
-        [{_, Context}] -> {ok, {AppContext, Context}}
+    case rabbit_oauth2_storage:lookup_access_code(AccessCode) of
+        {ok, {_, Context}} -> {ok, {AppContext, Context}};
+        {error, not_found} -> {error, notfound}
     end.
 
 revoke_access_code(AccessCode, AppContext) ->
-    ets:delete(?ETS_TABLE_CODE, AccessCode),
+    ok = rabbit_oauth2_storage:remove_access_code(AccessCode),
     {ok, AppContext}.
 
 %% Refresh token --------------------------------------------------------------
 
 associate_refresh_token(RefreshToken, Context, AppContext) ->
-    ets:insert(?ETS_TABLE_REFRESH, {RefreshToken, Context}),
+    ok = rabbit_oauth2_storage:save_refresh_token(RefreshToken, Context),
     {ok, AppContext}.
 
 resolve_refresh_token(RefreshToken, AppContext) ->
-    case ets:lookup(?ETS_TABLE_REFRESH, RefreshToken) of
-        []             -> {error, notfound};
-        [{_, Context}] -> {ok, {AppContext, Context}}
+    case rabbit_oauth2_storage:lookup_refresh_token(RefreshToken) of
+        {ok, {_, Context}} -> {ok, {AppContext, Context}};
+        {error, not_found} -> {error, notfound}
     end.
 
 revoke_refresh_token(RefreshToken, AppContext) ->
-    ets:delete(?ETS_TABLE_REFRESH, RefreshToken),
+    ok = rabbit_oauth2_storage:remove_refresh_token(RefreshToken),
     {ok, AppContext}.
 
 %% Scope ----------------------------------------------------------------------
@@ -185,29 +161,6 @@ resource_access(Resource, Permission, Ctx) ->
             Res == Resource andalso Perm == Permission
         end,
         get_scope_permissions(Ctx)).
-%% DB functions ---------------------------------------------------------------
-
-save(AccessToken, Context) ->
-    TokenRecord = #token{token = AccessToken, context = Context},
-    rabbit_misc:execute_mnesia_transaction(
-        fun () ->
-            ok = mnesia:write(?TOKEN_TABLE, TokenRecord, write)
-        end).
-
-lookup(AccessToken) ->
-    case rabbit_misc:dirty_read({?TOKEN_TABLE, AccessToken}) of
-        {error, not_found} -> {error, notfound};
-        {ok, #token{context = Context}} -> {ok, Context}
-    end.
-
-setup_schema() ->
-    mnesia:create_table(?TOKEN_TABLE,
-                             [{attributes, record_info(fields, token)},
-                              {record_name, token},
-                              {type, set}]),
-    mnesia:add_table_copy(?TOKEN_TABLE, node(), ram_copies),
-    mnesia:wait_for_tables([?TOKEN_TABLE], 30000),
-    ok.
 
 %% Internal -------------------------------------------------------------------
 

@@ -56,10 +56,10 @@ parse_scope_test() ->
         end,
         Scopes).
 save_load_token_test() ->
-    {error, notfound} = rabbit_oauth2_backend:lookup(<<"token">>),
-    ok = rabbit_oauth2_backend:save(<<"token1">>, [{<<"scope">>, [<<"FOO">>]}]),
-    {ok, [{<<"scope">>, [<<"FOO">>]}]} = rabbit_oauth2_backend:lookup(<<"token1">>),
-    {error, notfound} = rabbit_oauth2_backend:lookup(<<"token">>),
+    {error, not_found} = rabbit_oauth2_storage:lookup_access_token(<<"token">>),
+    {ok, []} = rabbit_oauth2_backend:associate_access_token(<<"token1">>, [{<<"scope">>, [<<"FOO">>]}], []),
+    {ok, {<<"token1">>, [{<<"scope">>, [<<"FOO">>]}]}} = rabbit_oauth2_storage:lookup_access_token(<<"token1">>),
+    {error, not_found} = rabbit_oauth2_storage:lookup_access_token(<<"token">>),
     TimeSec = time_compat:os_system_time(seconds),
     ok = rabbit_oauth2_backend:add_access_token(<<"token2">>, [<<"foo">>, <<"bar">>], 100, TimeSec),
     Context = [{<<"scope">>, [<<"foo">>, <<"bar">>]}, {<<"expiry_time">>, 100 + TimeSec}],
@@ -104,13 +104,14 @@ scope_permissions_test() ->
 
 
 token_permission_test() ->
+    TimeSec = time_compat:os_system_time(seconds),
     ok = rabbit_oauth2_backend:add_access_token(<<"token4">>, [<<"/_q_conf_foo">>], 1000, TimeSec),
-    {refused, _} = rabbit_auth_backend_oauth:user_login_authentication(<<"token3">>, []),
-    AuthUser = #auth_user{ username = Token } = 
+    {refused, _, _} = rabbit_auth_backend_oauth:user_login_authentication(<<"token3">>, []),
+    {ok, #auth_user{ username = <<"token4">> } = AuthUser} = 
         rabbit_auth_backend_oauth:user_login_authentication(<<"token4">>, []),
-    {ok, none} = rabbit_auth_backend_oauth:user_login_authorisation(<<"token4">>),
-    true = rabbit_auth_backend_oauth:check_vhost_access(AuthUser, <<"/">>),
-    false = rabbit_auth_backend_oauth:check_vhost_access(AuthUser, <<"other">>),
+    {ok, none, []} = rabbit_auth_backend_oauth:user_login_authorization(<<"token4">>),
+    true = rabbit_auth_backend_oauth:check_vhost_access(AuthUser, <<"/">>, none),
+    false = rabbit_auth_backend_oauth:check_vhost_access(AuthUser, <<"other">>, none),
     true = rabbit_auth_backend_oauth:check_resource_access(
         AuthUser,
         #resource{ virtual_host = <<"/">>, kind = queue, name = <<"foo">>},

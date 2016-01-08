@@ -4712,7 +4712,7 @@ $(ERLANG_MK_TMP)/last-makefile-change-erlydtl: $(MAKEFILE_LIST)
 ebin/$(PROJECT).app:: $(ERLANG_MK_TMP)/last-makefile-change-erlydtl
 endif
 
-ebin/$(PROJECT).app:: $(DTL_FILES)
+ebin/$(PROJECT).app:: $(DTL_FILES) | ebin/
 	$(if $(strip $?),\
 		$(dtl_verbose) $(call erlang,$(call erlydtl_compile.erl,$?,-pa ebin/ $(DEPS_DIR)/erlydtl/ebin/)))
 endif
