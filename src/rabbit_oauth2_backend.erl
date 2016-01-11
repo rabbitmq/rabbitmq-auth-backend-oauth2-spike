@@ -111,8 +111,12 @@ revoke_refresh_token(RefreshToken, AppContext) ->
 
 %% Scope ----------------------------------------------------------------------
 
-verify_scope(Scope, Scope, AppContext) -> {ok, {AppContext, Scope}};
-verify_scope(_, _, _)                  -> {error, invalid_scope}.
+verify_scope(RScope, Scope, AppContext) when is_list(RScope), is_list(Scope) -> 
+    case Scope -- RScope of
+        [] -> {ok, {AppContext, Scope}};
+        _  -> {error, invalid_scope}
+    end;
+verify_scope(_, _, _) -> {error, invalid_scope}.
 
 verify_resowner_scope(AuthUser, Scope, Ctx) -> 
     ScopePermissions = parse_scope(Scope),
@@ -136,15 +140,38 @@ verify_resowner_scope(AuthUser, Scope, Ctx) ->
         _             -> {error, invalid_scope}
     end.
 
-verify_client_scope(_, _, _)    -> {error, invalid_scope}.
+verify_client_scope({_, _, _, CScope}, Scope, Ctx) when is_list(CScope),
+                                                        is_list(Scope)  ->
+    case Scope -- CScope of
+        [] -> {ok, {Ctx, Scope}};
+        _  -> {error, invalid_scope}
+    end;
+verify_client_scope(_, _, _) -> {error, invalid_scope}.
 
 %% Client ---------------------------------------------------------------------
 
-authenticate_client(_, _) -> {error, notfound}.
-get_client_identity(_, _) -> {error, notfound}.
+authenticate_client({ClientId, Secret}, Ctx) -> 
+    case rabbit_oauth2_storage:lookup_client(ClientId) of
+        {ok, Client = {ClientId, Secret, _, _}} -> {ok, {Ctx, Client}};
+        {ok, _}            -> {error, badsecret};
+        {error, not_found} -> {error, notfound}
+    end.
 
-get_redirection_uri(_, _)       -> {error, notfound}.
-verify_redirection_uri(_, _, _) -> {error, mismatch}.
+get_client_identity(ClientId, Ctx) -> 
+    case rabbit_oauth2_storage:lookup_client(ClientId) of
+        {ok, Client} -> {ok, {Ctx, Client}};
+        {error, not_found} -> {error, notfound}
+    end.
+
+get_redirection_uri({ClientId, Secret}, Ctx) -> 
+    case rabbit_oauth2_storage:lookup_client(ClientId) of
+        {ok, {ClientId, Secret, RedirUrl, _}} -> {ok, {Ctx, RedirUrl}};
+        _ -> {error, notfound}
+    end.
+
+
+verify_redirection_uri({_, _, RedirUrl, _}, RedirUrl, Ctx) -> {ok, Ctx};
+verify_redirection_uri(_, _, _)                            -> {error, mismatch}.
 
 %% API functions --------------------------------------------------------------
 

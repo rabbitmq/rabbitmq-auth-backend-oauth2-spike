@@ -14,6 +14,8 @@ broker_tests() ->
     revoke_token_test(),
     expire_token_test(),
     token_permission_test(),
+    client_auth_grant_test(),
+    access_code_grant_test(),
     passed.
 
 parse_scope_test() ->
@@ -132,4 +134,65 @@ token_permission_test() ->
         AuthUser,
         #resource{ virtual_host = <<"/">>, kind = queue, name = <<"foo">>},
         write).
+
+
+client_auth_grant_test() ->
+    ClientId = <<"foo">>,
+    Secret   = <<"bar">>,
+    RedirUrl = <<"localhost">>,
+    Scope    = [<<"/_q_conf_foo">>],
+    ok = rabbit_oauth2_storage:save_client(ClientId, Secret, 
+                                           RedirUrl, Scope),
+    {ok, {n, Auth}}  = oauth2:authorize_client_credentials({ClientId, Secret}, 
+                                                           Scope, n),
+    {ok, {n, CodeResp}}  = oauth2:issue_code(Auth, n),
+    {ok, Code} = oauth2_response:access_code(CodeResp),
+    {ok, {n, Auth1}} = oauth2:authorize_code_grant({ClientId, Secret}, 
+                                                   Code, RedirUrl, n),
+    {ok, {n, TokenResp}} = oauth2:issue_token(Auth1, n),
+    {error, invalid_authorization} = oauth2:issue_token_and_refresh(Auth1, n),
+    {ok, AuthToken} = oauth2_response:access_token(TokenResp),
+    {ok, {n, Ctx}}  = oauth2:verify_access_token(AuthToken, n),
+    Scope = proplists:get_value(<<"scope">>, Ctx).
+
+access_code_grant_test() ->
+    ClientId = <<"foo1">>,
+    Secret   = <<"bar1">>,
+    RedirUrl = <<"localhost">>,
+    Scope    = [<<"/_q_conf_foo">>],
+    Username = <<"Derp">>,
+    Password = <<"Pass">>,
+    ok = rabbit_auth_backend_internal:add_user(Username, Password),
+    ok = rabbit_auth_backend_internal:set_permissions(Username, <<"/">>, 
+                                                      <<"fo.*">>, 
+                                                      <<"fo.*">>, 
+                                                      <<"fo.*">>),
+    ok = rabbit_oauth2_storage:save_client(ClientId, Secret, RedirUrl, Scope),
+    {ok, {n, Auth}} = oauth2:authorize_password({Username, Password},
+                                                {ClientId, Secret},
+                                                RedirUrl, Scope, n),
+    {ok, {n, CodeResp}}  = oauth2:issue_code(Auth, n),
+    {ok, Code} = oauth2_response:access_code(CodeResp),
+    
+    {ok, {n, Auth1}} = oauth2:authorize_code_grant({ClientId, Secret}, 
+                                                   Code, RedirUrl, n),
+    {ok, {n, TokenResp}} = oauth2:issue_token(Auth1, n),
+    {ok, {n, RefreshTokenResp}} = oauth2:issue_token_and_refresh(Auth1, n),
+    {ok, RefreshToken} = oauth2_response:refresh_token(RefreshTokenResp),
+    {ok, {n, TokenResp1}} = oauth2:refresh_access_token({ClientId, Secret}, 
+                                                        RefreshToken, Scope, n).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

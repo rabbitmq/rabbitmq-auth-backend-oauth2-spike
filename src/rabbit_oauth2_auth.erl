@@ -94,8 +94,9 @@ process_password_grant(Req, Params) ->
     Scope    = binary:split(proplists:get_value(<<"scope">>, Params, <<"">>), 
                             <<" ">>, 
                             [global]),
-    Auth = oauth2:authorize_password({Username, Password}, Scope, []),
-    issue_token(Auth, Req).
+    AuthResult = oauth2:authorize_password({Username, Password}, Scope, []),
+    Response = issue_token(AuthResult),
+    reply(Response, Req).
 
 process_client_credentials_grant(Req, Params) ->
     {<<"Basic ", Credentials/binary>>, Req2} =
@@ -104,10 +105,11 @@ process_client_credentials_grant(Req, Params) ->
     Scope    = binary:split(proplists:get_value(<<"scope">>, Params, <<"">>), 
                             <<" ">>, 
                             [global]),
-    {ok, {_Ctx, Auth}} = oauth2:authorize_client_credentials({Id, Secret}, 
+    AuthResult = oauth2:authorize_client_credentials({Id, Secret}, 
                                                              Scope, 
                                                              []),
-    issue_token(Auth, Req2).
+    Response = issue_token(AuthResult),
+    reply(Response, Req2).
 
 show_authorisation_form(Req, ResponseType, Params) ->
     State       = proplists:get_value(<<"state">>, Params),
@@ -139,28 +141,41 @@ process_authorization_grant(Req, ResponseType, Params) ->
     Password    = proplists:get_value(<<"password">>, Params),
     State       = proplists:get_value(<<"state">>, Params),
     Scope       = proplists:get_value(<<"scope">>, Params),
-    case oauth2:authorize_password({Username, Password}, ClientId, RedirectUri, Scope, []) of
-        {ok, {_, Auth}} ->
-            {ok, {_, Response}} = case ResponseType of
-                <<"token">>              -> oauth2:issue_token(Auth, []);
-                <<"authorization_code">> -> oauth2:issue_code(Auth, [])
+
+    ExtraParams = [{<<"state">>, State}],
+    case get_client(ClientId) of
+        {ok, {ClientId, Secret}} ->
+            AuthResult = oauth2:authorize_password({Username, Password}, 
+                                                   {ClientId, Secret}, 
+                                                   RedirectUri, Scope, []),
+            Response = case ResponseType of
+                <<"token">>              -> issue_token(AuthResult);
+                <<"authorization_code">> -> issue_code(AuthResult)
             end,
-            Props = [{<<"state">>, State}
-                     | oauth2_response:to_proplist(Response)],
-            redirect_resp(RedirectUri, Props, Req);
-        {error, Reason} ->
-            redirect_resp(RedirectUri,
-                          [{<<"error">>, atom_to_binary(Reason, utf8)},
-                           {<<"state">>, State}],
-                          Req)
+            redirect(RedirectUri, Response, ExtraParams, Req);
+        {error, Err} ->
+            redirect(RedirectUri, {error, Err}, ExtraParams, Req)
     end.
 
+get_client(ClientId) ->
+    case oauth2:get_client_identity(ClientId) of
+        {ok, {_, {ClientId, Secret, _, _}}} ->
+            {ok, {ClientId, Secret}};
+        {error, Err} -> {error, Err}
+    end.
+    
 process_authorization_token_grant(Req, Params) ->
     ClientId    = proplists:get_value(<<"client_id">>, Params),
     RedirectUri = proplists:get_value(<<"redirect_uri">>, Params),
     Code        = proplists:get_value(<<"code">>, Params),
-    issue_token(oauth2:authorize_code_grant(ClientId, Code, RedirectUri, []), 
-                Req).
+    case get_client(ClientId) of
+        {ok, {ClientId, Secret}} ->
+            AuthResult = oauth2:authorize_code_grant({ClientId, Secret}, 
+                                                     Code, RedirectUri, []),
+            Response = issue_token(AuthResult),
+            reply(Response, Req);
+        Err -> reply(Err, Req)
+    end.
 
 
 %%%===================================================================
@@ -172,43 +187,48 @@ refresh_token_grant() ->
                         grant_rerfesh_token, 
                         false).
 
-
-issue_token({ok, {_AppCtx, Auth}}, Req) ->
-    Response = case refresh_token_grant() of
+issue_token({ok, {_, Auth}}) ->
+    TokenResponse = case refresh_token_grant() of
         true  -> oauth2:issue_token_and_refresh(Auth, []);
         false -> oauth2:issue_token(Auth, [])
     end,
-    emit_response(Response, Req);
-issue_token(Error, Req) ->
-    emit_response(Error, Req).
+    case TokenResponse of
+        {ok, {_, TokenResp}} -> {ok, TokenResp};
+        {error, _} = Err     -> Err
+    end;
+issue_token({error, Err}) ->
+    {error, Err}.
 
-emit_response(AuthResult, Req) ->
-  {Code, JSON} =
-    case AuthResult of
-        {error, Reason} ->
-            {400, mochijson2:encode({struct, [{error, atom_to_binary(Reason, utf8)}]})};
-        {ok, {_,Response}} ->
-            PropList = lists:keydelete(<<"resource_owner">>, 1,
-                                       oauth2_response:to_proplist(Response)),
-            {200, mochijson2:encode({struct, PropList})}
-    end,
-  cowboy_req:reply(Code, [], JSON, Req).
+issue_code({ok, {_, Auth}}) ->
+    case oauth2:issue_code(Auth, []) of
+        {ok, {_, CodeResp}} -> {ok, CodeResp};
+        {error, _} = Err    -> Err
+    end;
+issue_code({error, Err}) ->
+    {error, Err}.
 
-redirect_resp(RedirectUri, FragParams, Req) ->
-    Frag = binary_join([<<(cow_qs:urlencode(K))/binary, "=",
-                          (cow_qs:urlencode(V))/binary>>
-                            || {K, V} <- FragParams],
-                       <<"&">>),
-    Header = [{<<"location">>, <<RedirectUri/binary, "#", Frag/binary>>}],
-    cowboy_req:reply(302, Header, <<>>, Req).
+reply({ok, Response}, Req) ->
+    Proplist = lists:keydelete(<<"resource_owner">>, 1, 
+                               oauth2_response:to_proplist(Response)),
+    cowboy_req:reply(200, [], mochijson2:encode({struct, Proplist}), Req);
+reply({error, Err}, Req) ->
+    cowboy_req:reply(400, [], 
+                     mochijson2:encode({struct, [{<<"error">>, Err}]}), 
+                     Req).
 
-binary_join([H], _Sep) ->
-    <<H/binary>>;
-binary_join([H|T], Sep) ->
-    <<H/binary, Sep/binary, (binary_join(T, Sep))/binary>>;
-binary_join([], _Sep) ->
-    <<>>.
+redirect(RedirectUri, {ok, Response}, Extra, Req) ->
+    Params = oauth2_response:to_proplist(Response) ++ Extra,
+    redirect(RedirectUri, Params, Req);
+redirect(RedirectUri, {error, Err}, Extra, Req) ->
+    Params = [{<<"error">>, Err} | Extra],
+    redirect(RedirectUri, Params, Req).
 
+redirect(RedirectUri, Params, Req) when is_list(Params) ->
+    Frag = cow_qs:qs(Params),
+    Req1 = cowboy_req:set_resp_header(<<"location">>, 
+                                      <<RedirectUri/binary, "#", Frag/binary>>, 
+                                      Req),
+    cowboy_req:reply(302, [], <<>>, Req1).
 
 
 
