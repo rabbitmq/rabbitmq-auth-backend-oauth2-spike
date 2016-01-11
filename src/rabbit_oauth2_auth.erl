@@ -167,8 +167,18 @@ process_authorization_token_grant(Req, Params) ->
 %%% Internal functions
 %%%===================================================================
 
+refresh_token_grant() ->
+    application:get_env(rabbitmq_auth_backend_oauth, 
+                        grant_rerfesh_token, 
+                        false).
+
+
 issue_token({ok, {_AppCtx, Auth}}, Req) ->
-    emit_response(oauth2:issue_token(Auth, []), Req);
+    Response = case refresh_token_grant() of
+        true  -> oauth2:issue_token_and_refresh(Auth, []);
+        false -> oauth2:issue_token(Auth, [])
+    end,
+    emit_response(Response, Req);
 issue_token(Error, Req) ->
     emit_response(Error, Req).
 
