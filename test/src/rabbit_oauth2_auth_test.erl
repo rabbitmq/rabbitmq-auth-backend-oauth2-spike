@@ -84,7 +84,8 @@ test_grant_type() ->
             {<<"access_token">>, AccessToken}  = proplists:lookup(<<"access_token">>, ResultData),
             {<<"expires_in">>,   Expiry}       = proplists:lookup(<<"expires_in">>, ResultData),
             {<<"scope">>,        Scope}        = proplists:lookup(<<"scope">>, ResultData),
-            {<<"token_type">>,   <<"bearer">>} = proplists:lookup(<<"token_type">>, ResultData)
+            {<<"token_type">>,   <<"bearer">>} = proplists:lookup(<<"token_type">>, ResultData),
+            ok = access_token(AccessToken, Scopes)
         end,
         GrantTypes).
 
@@ -118,16 +119,27 @@ test_resp_type() ->
                     {<<"access_token">>, AccessToken}  = proplists:lookup(<<"access_token">>, ResultData),
                     {<<"expires_in">>,   Expiry}       = proplists:lookup(<<"expires_in">>, ResultData),
                     {<<"scope">>,        Scope}        = proplists:lookup(<<"scope">>, ResultData),
-                    {<<"token_type">>,   <<"bearer">>} = proplists:lookup(<<"token_type">>, ResultData);
+                    {<<"token_type">>,   <<"bearer">>} = proplists:lookup(<<"token_type">>, ResultData),
+                    ok = access_token(AccessToken, Scopes);
                 <<"authorization_code">> ->
-                    {<<"access_code">>, AccessToken}  = proplists:lookup(<<"access_code">>, ResultData),
+                    {<<"access_code">>, AccessCode}  = proplists:lookup(<<"access_code">>, ResultData),
                     {<<"expires_in">>,  Expiry}       = proplists:lookup(<<"expires_in">>, ResultData),
                     {<<"scope">>,       Scope}        = proplists:lookup(<<"scope">>, ResultData),
-                    {<<"token_type">>,  <<"bearer">>} = proplists:lookup(<<"token_type">>, ResultData)
+                    {<<"token_type">>,  <<"bearer">>} = proplists:lookup(<<"token_type">>, ResultData),
+                    ok = access_code(AccessCode, ClientId, ClientSecret, RedirectUri)
             end
         end,
         RespTypes).
 
+access_token(AccessToken, Scope) ->
+    {ok, {n, Ctx}} = oauth2:verify_access_token(AccessToken, n),
+    Scope = proplists:get_value(<<"scope">>, Ctx),
+    ok.
+
+access_code(AccessCode, ClientId, ClientSecret, RedirectUri) ->
+    {ok, {n, _}} = oauth2:authorize_code_grant({ClientId, ClientSecret}, 
+                                               AccessCode, RedirectUri, n),
+    ok.
 
 create_client(ClientId, ClientSecret, RedirectUri, Scope) ->
     rabbit_oauth2_storage:save_client(ClientId, ClientSecret, RedirectUri, Scope).
