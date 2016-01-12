@@ -155,6 +155,11 @@ authenticate_client({ClientId, Secret}, Ctx) ->
         {ok, Client = {ClientId, Secret, _, _}} -> {ok, {Ctx, Client}};
         {ok, _}            -> {error, badsecret};
         {error, not_found} -> {error, notfound}
+    end;
+authenticate_client(ClientId, Ctx) ->
+    case rabbit_oauth2_storage:lookup_client(ClientId) of
+        {ok, Client}       -> {ok, {Ctx, Client}};
+        {error, not_found} -> {error, notfound}
     end.
 
 get_client_identity(ClientId, Ctx) -> 

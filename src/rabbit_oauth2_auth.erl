@@ -91,29 +91,25 @@ process_get(Req, State) ->
 process_password_grant(Req, Params) ->
     Username = proplists:get_value(<<"username">>, Params),
     Password = proplists:get_value(<<"password">>, Params),
-    Scope    = binary:split(proplists:get_value(<<"scope">>, Params, <<"">>), 
-                            <<" ">>, 
-                            [global]),
+    Scope    = get_scope(Params),
     AuthResult = oauth2:authorize_password({Username, Password}, Scope, []),
     Response = issue_token(AuthResult),
     reply(Response, Req).
 
 process_client_credentials_grant(Req, Params) ->
-    {<<"Basic ", Credentials/binary>>, Req2} =
-        cowboy_req:header(<<"authorization">>, Req),
-    [Id, Secret] = binary:split(base64:decode(Credentials), <<":">>),
-    Scope    = binary:split(proplists:get_value(<<"scope">>, Params, <<"">>), 
-                            <<" ">>, 
-                            [global]),
-    AuthResult = oauth2:authorize_client_credentials({Id, Secret}, 
-                                                             Scope, 
-                                                             []),
-    Response = issue_token(AuthResult),
-    reply(Response, Req2).
+    case cowboy_req:header(<<"authorization">>, Req) of
+        {<<"Basic ", Credentials/binary>>, Req2} ->
+            [Id, Secret] = binary:split(base64:decode(Credentials), <<":">>),
+            Scope = get_scope(Params),
+            AuthResult = oauth2:authorize_client_credentials({Id, Secret}, Scope, []),
+            Response = issue_token(AuthResult),
+            reply(Response, Req2);
+        _ -> cowboy_req:reply(401, Req)
+    end.
 
 show_authorisation_form(Req, ResponseType, Params) ->
     State       = proplists:get_value(<<"state">>, Params),
-    Scope       = proplists:get_value(<<"scope">>, Params, <<>>),
+    Scope       = get_scope(Params),
     ClientId    = proplists:get_value(<<"client_id">>, Params),
     RedirectUri = proplists:get_value(<<"redirect_uri">>, Params),
     %% Pass the scope, state and redirect URI to the browser
@@ -140,42 +136,25 @@ process_authorization_grant(Req, ResponseType, Params) ->
     Username    = proplists:get_value(<<"username">>, Params),
     Password    = proplists:get_value(<<"password">>, Params),
     State       = proplists:get_value(<<"state">>, Params),
-    Scope       = proplists:get_value(<<"scope">>, Params),
+    Scope       = get_scope(Params),
 
     ExtraParams = [{<<"state">>, State}],
-    case get_client(ClientId) of
-        {ok, {ClientId, Secret}} ->
-            AuthResult = oauth2:authorize_password({Username, Password}, 
-                                                   {ClientId, Secret}, 
-                                                   RedirectUri, Scope, []),
-            Response = case ResponseType of
-                <<"token">>              -> issue_token(AuthResult);
-                <<"authorization_code">> -> issue_code(AuthResult)
-            end,
-            redirect(RedirectUri, Response, ExtraParams, Req);
-        {error, Err} ->
-            redirect(RedirectUri, {error, Err}, ExtraParams, Req)
-    end.
-
-get_client(ClientId) ->
-    case oauth2:get_client_identity(ClientId) of
-        {ok, {_, {ClientId, Secret, _, _}}} ->
-            {ok, {ClientId, Secret}};
-        {error, Err} -> {error, Err}
-    end.
+    AuthResult = oauth2:authorize_code_request({Username, Password}, 
+                                               ClientId, 
+                                               RedirectUri, Scope, []),
+    Response = case ResponseType of
+        <<"token">>              -> issue_token(AuthResult);
+        <<"authorization_code">> -> issue_code(AuthResult)
+    end,
+    redirect(RedirectUri, Response, ExtraParams, Req).
     
 process_authorization_token_grant(Req, Params) ->
     ClientId    = proplists:get_value(<<"client_id">>, Params),
     RedirectUri = proplists:get_value(<<"redirect_uri">>, Params),
     Code        = proplists:get_value(<<"code">>, Params),
-    case get_client(ClientId) of
-        {ok, {ClientId, Secret}} ->
-            AuthResult = oauth2:authorize_code_grant({ClientId, Secret}, 
-                                                     Code, RedirectUri, []),
-            Response = issue_token(AuthResult),
-            reply(Response, Req);
-        Err -> reply(Err, Req)
-    end.
+    AuthResult = oauth2:authorize_code_grant(ClientId, Code, RedirectUri, []),
+    Response = issue_token(AuthResult),
+    reply(Response, Req).
 
 
 %%%===================================================================
@@ -224,14 +203,22 @@ redirect(RedirectUri, {error, Err}, Extra, Req) ->
     redirect(RedirectUri, Params, Req).
 
 redirect(RedirectUri, Params, Req) when is_list(Params) ->
-    Frag = cow_qs:qs(Params),
+    BinParams = lists:map(
+        fun ({K,V}) when is_integer(V) -> {K, integer_to_binary(V)};
+            ({K,V}) when is_binary(V) -> {K,V}
+        end,
+        Params),
+    Frag = cow_qs:qs(BinParams),
     Req1 = cowboy_req:set_resp_header(<<"location">>, 
                                       <<RedirectUri/binary, "#", Frag/binary>>, 
                                       Req),
     cowboy_req:reply(302, [], <<>>, Req1).
 
 
-
+get_scope(Params) ->
+    binary:split(proplists:get_value(<<"scope">>, Params, <<>>), 
+                 <<" ">>, 
+                 [global]).
 
 
 
