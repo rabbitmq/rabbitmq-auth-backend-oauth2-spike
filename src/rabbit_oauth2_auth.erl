@@ -16,6 +16,8 @@
         ,process_get/2
         ]).
 
+-export([binary_join/2]).
+
 %%%===================================================================
 %%% Cowboy callbacks
 %%%===================================================================
@@ -51,7 +53,7 @@ process_post(Req, State) ->
                 process_authorization_token_grant(Req2, Params);
             undefined ->
                 case proplists:get_value(<<"response_type">>, Params) of
-                    RT when RT == <<"token">>; RT == <<"code">> ->
+                    RT when RT == <<"token">>; RT == <<"authorization_code">> ->
                         process_authorization_grant(Req2, RT, Params);
                     _ -> 
                         cowboy_req:reply(400, [], <<"Bad Request.">>, Req2)
@@ -62,22 +64,20 @@ process_post(Req, State) ->
     {halt, Reply, State}.
 
 process_get(Req, State) ->
-    {ResponseType, Req2} = cowboy_req:qs_val(<<"response_type">>, Req),
+    {QsVals, Req2} = cowboy_req:qs_vals(Req),
+    ResponseType = proplists:get_value(<<"response_type">>, QsVals),
     {ok, Reply} =
         case ResponseType of
-            RT when RT == <<"token">>; RT == <<"code">> ->
-                {Req3, Params} =
-                    lists:foldl(fun(Name, {R, Acc}) ->
-                                        {Val, R2} =
-                                            cowboy_req:qs_val(Name, R),
-                                        {R2, [{Name, Val}|Acc]}
-                                end,
-                                {Req2, []},
-                                [<<"client_id">>,
-                                 <<"redirect_uri">>,
-                                 <<"scope">>,
-                                 <<"state">>]),
-                show_authorisation_form(Req3, ResponseType, Params);
+            RT when RT == <<"token">>; RT == <<"authorization_code">> ->
+                Params = lists:filter(
+                    fun({K, V}) -> 
+                        lists:member(K, [<<"client_id">>,
+                                         <<"redirect_uri">>,
+                                         <<"scope">>,
+                                         <<"state">>])
+                    end,
+                    QsVals),
+                show_authorisation_form(Req2, ResponseType, Params);
             _ ->
                 JSON = mochijson2:encode({struct, [{error,  <<"unsupported_response_type">>}]}),
                 cowboy_req:reply(400, [], JSON, Req2)
@@ -122,7 +122,7 @@ show_authorisation_form(Req, ResponseType, Params) ->
             {ok, Html} = auth_form_dtl:render([{redirect_uri, RedirectUri},
                                                {client_id, ClientId},
                                                {state, State},
-                                               {scope, Scope},
+                                               {scope, binary_join(Scope, <<" ">>)},
                                                {response_type, ResponseType}]),
             cowboy_req:reply(200, [], Html, Req)
     end.
@@ -205,7 +205,8 @@ redirect(RedirectUri, {error, Err}, Extra, Req) ->
 redirect(RedirectUri, Params, Req) when is_list(Params) ->
     BinParams = lists:map(
         fun ({K,V}) when is_integer(V) -> {K, integer_to_binary(V)};
-            ({K,V}) when is_binary(V) -> {K,V}
+            ({K,V}) when is_atom(V)    -> {K, atom_to_binary(V, utf8)};
+            ({K,V}) when is_binary(V)  -> {K,V}
         end,
         Params),
     Frag = cow_qs:qs(BinParams),
@@ -220,7 +221,10 @@ get_scope(Params) ->
                  <<" ">>, 
                  [global]).
 
-
+binary_join([], _) -> <<>>;
+binary_join([H], _) -> H;
+binary_join([H1, H2 | T], Sep) ->
+    binary_join([<<H1/binary, Sep/binary, H2/binary>> | T], Sep).
 
 
 
