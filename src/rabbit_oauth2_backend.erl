@@ -23,7 +23,6 @@
 -export([verify_resowner_scope/3]).
 -export([verify_scope/3]).
 
--export([vhost_access/2, resource_access/3]).
 -export([add_access_token/3, add_access_token/4]).
 -export([oauth2_backend_env/0]).
 
@@ -119,7 +118,7 @@ verify_scope(RScope, Scope, AppContext) when is_list(RScope), is_list(Scope) ->
 verify_scope(_, _, _) -> {error, invalid_scope}.
 
 verify_resowner_scope(AuthUser, Scope, Ctx) -> 
-    ScopePermissions = parse_scope(Scope),
+    ScopePermissions = rabbit_oauth2_scope:parse_scope(Scope),
     ValidScope = lists:filtermap(
         fun({Resource, Permission, ScopeEl}) ->
             case ?BACKEND:check_resource_access(AuthUser, 
@@ -177,80 +176,5 @@ get_redirection_uri({ClientId, Secret}, Ctx) ->
 
 verify_redirection_uri({_, _, RedirUrl, _}, RedirUrl, Ctx) -> {ok, Ctx};
 verify_redirection_uri(_, _, _)                            -> {error, mismatch}.
-
-%% API functions --------------------------------------------------------------
-
-vhost_access(VHost, Ctx) ->
-    lists:any(
-        fun({#resource{ virtual_host = VH }, _}) ->
-            VH == VHost
-        end,
-        get_scope_permissions(Ctx)).
-
-resource_access(Resource, Permission, Ctx) ->
-    lists:any(
-        fun({Res, Perm}) ->
-            Res == Resource andalso Perm == Permission
-        end,
-        get_scope_permissions(Ctx)).
-
-%% Internal -------------------------------------------------------------------
-
-get_scope_permissions(Ctx) -> 
-    case lists:keyfind(<<"scope">>, 1, Ctx) of
-        {_, Scope} -> 
-            [ {Res, Perm} || {Res, Perm, _ScopeEl} <- parse_scope(Scope) ];
-        false -> []
-    end.
-
-parse_scope(Scope) when is_list(Scope) ->
-    lists:filtermap(
-        fun(ScopeEl) ->
-            case parse_scope_el(ScopeEl) of
-                ignore -> false;
-                Perm   -> {true, Perm}
-            end
-        end,
-        Scope).
-
-parse_scope_el(ScopeEl) when is_binary(ScopeEl) ->
-    case binary:split(ScopeEl, <<"_">>, [global]) of
-        [VHost, KindCode, PermCode | Name] ->
-            Kind = case KindCode of
-                <<"q">>  -> queue;
-                <<"ex">> -> exchange;
-                <<"t">>  -> topic;
-                _        -> ignore
-            end,
-            Permission = case PermCode of
-                <<"conf">>  -> configure;
-                <<"write">> -> write;
-                <<"read">>  -> read;
-                _           -> ignore
-            end,
-            case Kind == ignore orelse Permission == ignore orelse Name == [] of
-                true -> ignore;
-                false ->
-                    {
-                        #resource{
-                            virtual_host = VHost, 
-                            kind = Kind, 
-                            name = binary_join(Name, <<"_">>)},
-                        Permission,
-                        ScopeEl
-                    }
-            end;
-        _ -> ignore
-    end.
-
-binary_join([B|Bs], Sep) ->
-    iolist_to_binary([B|add_separator(Bs, Sep)]);                                                  
-binary_join([], _Sep) ->                                       
-    <<>>.                                                
-                                                         
-add_separator([B|Bs], Sep) ->                               
-    [Sep, B | add_separator(Bs, Sep)];                        
-add_separator([], _) ->                                  
-    [].                                                  
 
 

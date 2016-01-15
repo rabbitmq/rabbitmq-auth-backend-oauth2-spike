@@ -50,7 +50,7 @@ test_get() ->
     RespTypes).
 
 test_grant_type() ->
-    Scope = <<"/_q_conf_foo /_ex_conf_bar">>,
+    Scope = <<"/_q_configure_foo /_ex_configure_bar">>,
     Scopes = binary:split(Scope, <<" ">>, [global]),
     ClientId = <<"foo">>,
     ClientSecret = <<"bar">>,
@@ -90,7 +90,7 @@ test_grant_type() ->
         GrantTypes).
 
 test_resp_type() ->
-    Scope = <<"/_q_conf_foo /_ex_conf_bar">>,
+    Scope = <<"/_q_configure_foo /_ex_configure_bar">>,
     Scopes = binary:split(Scope, <<" ">>, [global]),
     ClientId = <<"foo">>,
     ClientSecret = <<"bar">>,

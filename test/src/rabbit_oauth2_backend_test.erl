@@ -21,30 +21,30 @@ broker_tests() ->
 parse_scope_test() ->
     Scopes = [
         % VHost_Kind_Permission_Name
-        {<<"vhost_q_conf_foo">>, {<<"vhost">>, queue, <<"foo">>, configure}},
+        {<<"vhost_q_configure_foo">>, {<<"vhost">>, queue, <<"foo">>, configure}},
         {<<"vhost_q_write_foo">>, {<<"vhost">>, queue, <<"foo">>, write}},
         {<<"vhost_q_read_foo">>, {<<"vhost">>, queue, <<"foo">>, read}},
-        {<<"vhost_ex_conf_foo">>, {<<"vhost">>, exchange, <<"foo">>, configure}},
+        {<<"vhost_ex_configure_foo">>, {<<"vhost">>, exchange, <<"foo">>, configure}},
         {<<"vhost_ex_write_foo">>, {<<"vhost">>, exchange, <<"foo">>, write}},
         {<<"vhost_ex_read_foo">>, {<<"vhost">>, exchange, <<"foo">>, read}},
         {<<"vhost_t_write_foo">>, {<<"vhost">>, topic, <<"foo">>, write}},
         % Name can contain '_'
-        {<<"vhost_q_conf_foo_bar_baz">>, {<<"vhost">>, queue, <<"foo_bar_baz">>, configure}},
+        {<<"vhost_q_configure_foo_bar_baz">>, {<<"vhost">>, queue, <<"foo_bar_baz">>, configure}},
         % Vhost cannot contain '_'
-        {<<"vhost_foo_q_conf_foo_bar">>, ignore},
+        {<<"vhost_foo_q_configure_foo_bar">>, ignore},
         % Vhost and name can contain different characters
-        {<<"vhost.com/foo_q_conf_foo.bar,baz">>, {<<"vhost.com/foo">>, queue, <<"foo.bar,baz">>, configure}},
+        {<<"vhost.com/foo_q_configure_foo.bar,baz">>, {<<"vhost.com/foo">>, queue, <<"foo.bar,baz">>, configure}},
         % Kind and Permission should be valid
-        {<<"vhost_qu_conf_name">>, ignore},
-        {<<"vhost_q_noconf_name">>, ignore},
+        {<<"vhost_qu_configure_name">>, ignore},
+        {<<"vhost_q_noconfigure_name">>, ignore},
         % There should be all parts
         {<<"vhost_q_conf">>, ignore},
         {<<"vhost_q_name">>, ignore},
-        {<<"q_conf_name">>, ignore},
+        {<<"q_configure_name">>, ignore},
         % '/' for default host
-        {<<"/_q_conf_foo">>, {<<"/">>, queue, <<"foo">>, configure}},
+        {<<"/_q_configure_foo">>, {<<"/">>, queue, <<"foo">>, configure}},
         % Utf?
-        {<<"/_q_conf_ПиуПиу"/utf8>>, {<<"/">>, queue, <<"ПиуПиу"/utf8>>, configure}}  
+        {<<"/_q_configure_ПиуПиу"/utf8>>, {<<"/">>, queue, <<"ПиуПиу"/utf8>>, configure}}  
     ],
     lists:foreach(
         fun({Scope, Result}) ->
@@ -82,17 +82,17 @@ expire_token_test() ->
 scope_permissions_test() ->
     Examples = [
         % VHost_Kind_Permission_Name
-        {<<"vhost_q_conf_foo">>, {<<"vhost">>, queue, <<"foo">>, configure}},
+        {<<"vhost_q_configure_foo">>, {<<"vhost">>, queue, <<"foo">>, configure}},
         {<<"vhost_q_write_foo">>, {<<"vhost">>, queue, <<"foo">>, write}},
         {<<"vhost_q_read_foo">>, {<<"vhost">>, queue, <<"foo">>, read}},
-        {<<"vhost_ex_conf_foo">>, {<<"vhost">>, exchange, <<"foo">>, configure}},
+        {<<"vhost_ex_configure_foo">>, {<<"vhost">>, exchange, <<"foo">>, configure}},
         {<<"vhost_ex_write_foo">>, {<<"vhost">>, exchange, <<"foo">>, write}},
         {<<"vhost_ex_read_foo">>, {<<"vhost">>, exchange, <<"foo">>, read}},
         {<<"vhost_t_write_foo">>, {<<"vhost">>, topic, <<"foo">>, write}},
-        {<<"vhost_q_conf_foo_bar_baz">>, {<<"vhost">>, queue, <<"foo_bar_baz">>, configure}},
-        {<<"vhost.com/foo_q_conf_foo.bar,baz">>, {<<"vhost.com/foo">>, queue, <<"foo.bar,baz">>, configure}},
-        {<<"/_q_conf_foo">>, {<<"/">>, queue, <<"foo">>, configure}},
-        {<<"/_q_conf_ПиуПиу"/utf8>>, {<<"/">>, queue, <<"ПиуПиу"/utf8>>, configure}}  
+        {<<"vhost_q_configure_foo_bar_baz">>, {<<"vhost">>, queue, <<"foo_bar_baz">>, configure}},
+        {<<"vhost.com/foo_q_configure_foo.bar,baz">>, {<<"vhost.com/foo">>, queue, <<"foo.bar,baz">>, configure}},
+        {<<"/_q_configure_foo">>, {<<"/">>, queue, <<"foo">>, configure}},
+        {<<"/_q_configure_ПиуПиу"/utf8>>, {<<"/">>, queue, <<"ПиуПиу"/utf8>>, configure}}  
     ],
     lists:foreach(
         fun(Example) ->
@@ -107,7 +107,7 @@ scope_permissions_test() ->
 
 token_permission_test() ->
     TimeSec = time_compat:os_system_time(seconds),
-    ok = rabbit_oauth2_backend:add_access_token(<<"token4">>, [<<"/_q_conf_foo">>], 1000, TimeSec),
+    ok = rabbit_oauth2_backend:add_access_token(<<"token4">>, [<<"/_q_configure_foo">>], 1000, TimeSec),
     {refused, _, _} = rabbit_auth_backend_oauth:user_login_authentication(<<"token3">>, []),
     {ok, #auth_user{ username = <<"token4">> } = AuthUser} = 
         rabbit_auth_backend_oauth:user_login_authentication(<<"token4">>, []),
@@ -140,7 +140,7 @@ client_auth_grant_test() ->
     ClientId = <<"foo">>,
     Secret   = <<"bar">>,
     RedirUrl = <<"localhost">>,
-    Scope    = [<<"/_q_conf_foo">>],
+    Scope    = [<<"/_q_configure_foo">>],
     ok = rabbit_oauth2_storage:save_client(ClientId, Secret, 
                                            RedirUrl, Scope),
     {ok, {n, Auth}}  = oauth2:authorize_client_credentials({ClientId, Secret}, 
@@ -159,7 +159,7 @@ access_code_grant_test() ->
     ClientId = <<"foo1">>,
     Secret   = <<"bar1">>,
     RedirUrl = <<"localhost">>,
-    Scope    = [<<"/_q_conf_foo">>],
+    Scope    = [<<"/_q_configure_foo">>],
     Username = <<"Derp">>,
     Password = <<"Pass">>,
     ok = rabbit_auth_backend_internal:add_user(Username, Password),

@@ -63,12 +63,12 @@ user_login_authorization(Username) ->
 
 check_vhost_access(#auth_user{username = Username}, VHost, _Sock) ->
     with_token_context(Username, fun(Ctx) ->
-        rabbit_oauth2_backend:vhost_access(VHost, Ctx)
+        rabbit_oauth2_scope:vhost_access(VHost, Ctx)
     end).
 
 check_resource_access(#auth_user{username = Username}, Resource, Permission) ->
     with_token_context(Username, fun(Ctx) ->
-        rabbit_oauth2_backend:resource_access(Resource, Permission, Ctx)
+        rabbit_oauth2_scope:resource_access(Resource, Permission, Ctx)
     end).
 
 with_token_context(Token, Fun) ->
