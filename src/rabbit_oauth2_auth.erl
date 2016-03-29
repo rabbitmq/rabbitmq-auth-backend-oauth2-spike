@@ -70,7 +70,7 @@ process_get(Req, State) ->
         case ResponseType of
             RT when RT == <<"token">>; RT == <<"authorization_code">> ->
                 Params = lists:filter(
-                    fun({K, V}) -> 
+                    fun({K, _V}) -> 
                         lists:member(K, [<<"client_id">>,
                                          <<"redirect_uri">>,
                                          <<"scope">>,
