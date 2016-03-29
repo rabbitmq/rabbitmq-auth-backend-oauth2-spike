@@ -1,9 +1,12 @@
-# Oauth authorization backend.
+# RabbitMQ OAuth 2.0 Authorization Backend.
 
-This plugin enables oauth authorization for RabbitMQ clients.
+This plugin aims to provide OAuth 2.0 authorization for RabbitMQ clients.
 
-It uses OAuth2 library https://github.com/kivra/oauth2 which provide API functions
-to work with OAuth2 workflow.
+## Project Maturity
+
+This project is very immature, its scope is still up in the air, and
+it is way too early to adopt it. Please check in 6 months.
+
 
 ## Auth workflow
 
