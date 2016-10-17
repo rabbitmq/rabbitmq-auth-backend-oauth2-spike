@@ -163,7 +163,7 @@ process_authorization_token_grant(Req, Params) ->
 
 refresh_token_grant() ->
     application:get_env(rabbitmq_auth_backend_oauth, 
-                        grant_rerfesh_token, 
+                        grant_refresh_token, 
                         false).
 
 issue_token({ok, {_, Auth}}) ->
