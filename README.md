@@ -4,11 +4,7 @@ This plugin aims to provide OAuth 2.0 authorization for RabbitMQ clients.
 
 ## Project Maturity
 
-This project is very immature, its scope is still up in the air, and
-it is way too early to adopt it. Its close relative, [rabbitmq-auth-backend-uaa](https://github.com/rabbitmq/rabbitmq-auth-backend-uaa),
-has been getting more attention and more refined design and implementation ideas
-related to OAuth 2.0 support in RabbitMQ.
-
+This project ws **a spike that's no longer under development**. See [rabbitmq-auth-backend-oauth2](https://github.com/rabbitmq/rabbitmq-auth-backend-oauth2) for an OAuth 2/JWT [authentication and authorisation backend](http://www.rabbitmq.com/access-control.html) for RabbitMQ.
 
 ## Auth workflow
 
